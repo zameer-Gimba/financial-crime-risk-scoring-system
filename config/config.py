@@ -16,10 +16,10 @@ RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
 MODEL_DIR = PROJECT_ROOT / "models"
+BASE_MODEL_DIR = MODEL_DIR / "base_models"
+
 REPORT_DIR = PROJECT_ROOT / "reports"
-
 DOCS_DIR = PROJECT_ROOT / "docs"
-
 NOTEBOOK_DIR = PROJECT_ROOT / "notebooks"
 
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -40,9 +40,7 @@ MERGED_TEST = PROCESSED_DATA_DIR / "merged_test.parquet"
 ENGINEERED_TRAIN = PROCESSED_DATA_DIR / "engineered_train.parquet"
 ENGINEERED_TEST = PROCESSED_DATA_DIR / "engineered_test.parquet"
 
-BASE_MODEL_DIR = MODEL_DIR / "base_models"
 STACKING_MODEL = MODEL_DIR / "ensemble_model.joblib"
-
 
 # RANDOMNESS
 
@@ -51,7 +49,6 @@ RANDOM_STATE = 42
 # TRAINING
 
 TEST_SIZE = 0.20
-
 N_FOLDS = 5
 
 TARGET = "isFraud"
@@ -68,14 +65,17 @@ DIRECTORIES = [
     RAW_DATA_DIR,
     PROCESSED_DATA_DIR,
     MODEL_DIR,
+    BASE_MODEL_DIR,
     REPORT_DIR,
-    LOG_DIR
+    DOCS_DIR,
+    NOTEBOOK_DIR,
+    LOG_DIR,
 ]
 
 
 def create_directories() -> None:
     """
-    Creates required project directories if they do not exist.
+    Create all required project directories if they do not already exist.
     """
 
     for directory in DIRECTORIES:
