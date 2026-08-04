@@ -41,6 +41,8 @@ ENGINEERED_TRAIN = PROCESSED_DATA_DIR / "engineered_train.parquet"
 ENGINEERED_TEST = PROCESSED_DATA_DIR / "engineered_test.parquet"
 
 MODEL_FILE = MODEL_DIR / "ensemble_model.joblib"
+BASE_MODELS = MODEL_DIR / "Base_models"
+
 
 # RANDOMNESS
 
