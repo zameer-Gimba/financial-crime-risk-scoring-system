@@ -40,8 +40,8 @@ MERGED_TEST = PROCESSED_DATA_DIR / "merged_test.parquet"
 ENGINEERED_TRAIN = PROCESSED_DATA_DIR / "engineered_train.parquet"
 ENGINEERED_TEST = PROCESSED_DATA_DIR / "engineered_test.parquet"
 
-MODEL_FILE = MODEL_DIR / "ensemble_model.joblib"
-BASE_MODELS = MODEL_DIR / "Base_models"
+BASE_MODEL_DIR = MODEL_DIR / "base_models"
+STACKING_MODEL = MODEL_DIR / "ensemble_model.joblib"
 
 
 # RANDOMNESS
