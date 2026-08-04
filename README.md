@@ -230,8 +230,8 @@ Computer Scientist | Data Scientist | Machine Learning Engineer | Project Manage
 
 GitHub:
 
-(Add repository link after publishing.)
+https://github.com/zameer-Gimba/financial-crime-risk-scoring-system
 
 LinkedIn:
 
-(Add LinkedIn profile.)
+https://www.linkedin.com/in/muhammad-ibrahim-gimba-60b87718b
