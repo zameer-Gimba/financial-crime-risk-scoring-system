@@ -13,8 +13,8 @@ from __future__ import annotations
 import pandas as pd
 
 from config.config import (
-    ENGINEERED_TEST,
-    ENGINEERED_TRAIN,
+    PREPROCESSED_TEST,
+    PREPROCESSED_TRAIN,
 )
 from config.logging_config import get_logger
 from src.data_validation import DataValidator
@@ -166,12 +166,12 @@ class DataPreprocessor:
 
         save_dataframe(
             processed_train,
-            ENGINEERED_TRAIN,
+            PREPROCESSED_TRAIN,
         )
 
         save_dataframe(
             processed_test,
-            ENGINEERED_TEST,
+            PREPROCESSED_TEST,
         )
 
         logger.info(
