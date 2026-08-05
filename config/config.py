@@ -37,6 +37,9 @@ TEST_IDENTITY = RAW_DATA_DIR / "test_identity.csv"
 MERGED_TRAIN = PROCESSED_DATA_DIR / "merged_train.parquet"
 MERGED_TEST = PROCESSED_DATA_DIR / "merged_test.parquet"
 
+PREPROCESSED_TRAIN = PROCESSED_DATA_DIR / "preprocessed_train.parquet"
+PREPROCESSED_TEST = PROCESSED_DATA_DIR / "preprocessed_test.parquet"
+
 ENGINEERED_TRAIN = PROCESSED_DATA_DIR / "engineered_train.parquet"
 ENGINEERED_TEST = PROCESSED_DATA_DIR / "engineered_test.parquet"
 
