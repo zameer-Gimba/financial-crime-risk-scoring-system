@@ -93,11 +93,15 @@ class FeatureEngineer:
                 .astype("float32")
             )
 
-            df["transaction_amount_bin"] = pd.qcut(
-                df["TransactionAmt"],
-                q=10,
-                duplicates="drop",
-                labels=False,
+            df["transaction_amount_bin"] = (
+                pd.qcut(
+                    df["TransactionAmt"],
+                    q=10,
+                    duplicates="drop",
+                    labels=False,
+                )
+                .fillna(-1)
+                .astype("int8")
             )
 
             frequency = (
@@ -116,111 +120,7 @@ class FeatureEngineer:
 
         return df
 
-    def run(self) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Execute the feature engineering pipeline.
-        """
-
-        logger.info(
-            "Loading preprocessed datasets..."
-        )
-
-        train_df = load_parquet(
-            PREPROCESSED_TRAIN
-        )
-
-        test_df = load_parquet(
-            PREPROCESSED_TEST
-        )
-
-        logger.info(
-            "Generating features for training dataset..."
-        )
-
-        train_df = self._create_time_features(
-            train_df
-        )
-
-        train_df = self._create_transaction_features(
-            train_df
-        )
-
-        logger.info(
-            "Generating features for test dataset..."
-        )
-
-        test_df = self._create_time_features(
-            test_df
-        )
-
-        test_df = self._create_transaction_features(
-            test_df
-        )
-
-        train_df = self._create_card_features(
-    train_df
-)
-
-train_df = self._create_identity_features(
-    train_df
-)
-
-test_df = self._create_card_features(
-    test_df
-)
-
-test_df = self._create_identity_features(
-    test_df
-)
-
-                train_df = self._create_behavior_features(
-            train_df
-        )
-
-        train_df = self._create_aggregation_features(
-            train_df
-        )
-
-        test_df = self._create_behavior_features(
-            test_df
-        )
-
-        test_df = self._create_aggregation_features(
-            test_df
-        )
-
-        save_dataframe(
-            train_df,
-            ENGINEERED_TRAIN,
-        )
-
-        save_dataframe(
-            test_df,
-            ENGINEERED_TEST,
-        )
-
-        logger.info(
-            "Feature engineering completed successfully."
-        )
-
-        return train_df, test_df
-
-        save_dataframe(
-            train_df,
-            ENGINEERED_TRAIN,
-        )
-
-        save_dataframe(
-            test_df,
-            ENGINEERED_TEST,
-        )
-
-        logger.info(
-            "Feature engineering completed."
-        )
-
-        return train_df, test_df
-          def _create_card_features(
+    def _create_card_features(
         self,
         dataframe: pd.DataFrame,
     ) -> pd.DataFrame:
@@ -350,7 +250,8 @@ test_df = self._create_identity_features(
         logger.info("Identity features created.")
 
         return df
-          def _create_behavior_features(
+
+    def _create_behavior_features(
         self,
         dataframe: pd.DataFrame,
     ) -> pd.DataFrame:
@@ -452,6 +353,97 @@ test_df = self._create_identity_features(
         logger.info("Aggregation features created.")
 
         return df
+
+    def run(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Execute the feature engineering pipeline.
+        """
+
+        logger.info(
+            "Loading preprocessed datasets..."
+        )
+
+        train_df = load_parquet(
+            PREPROCESSED_TRAIN
+        )
+
+        test_df = load_parquet(
+            PREPROCESSED_TEST
+        )
+
+        logger.info(
+            "Generating features for training dataset..."
+        )
+
+        train_df = self._create_time_features(
+            train_df
+        )
+
+        train_df = self._create_transaction_features(
+            train_df
+        )
+
+        logger.info(
+            "Generating features for test dataset..."
+        )
+
+        test_df = self._create_time_features(
+            test_df
+        )
+
+        test_df = self._create_transaction_features(
+            test_df
+        )
+
+        train_df = self._create_card_features(
+            train_df
+        )
+
+        train_df = self._create_identity_features(
+            train_df
+        )
+
+        test_df = self._create_card_features(
+            test_df
+        )
+
+        test_df = self._create_identity_features(
+            test_df
+        )
+
+        train_df = self._create_behavior_features(
+            train_df
+        )
+
+        train_df = self._create_aggregation_features(
+            train_df
+        )
+
+        test_df = self._create_behavior_features(
+            test_df
+        )
+
+        test_df = self._create_aggregation_features(
+            test_df
+        )
+
+        save_dataframe(
+            train_df,
+            ENGINEERED_TRAIN,
+        )
+
+        save_dataframe(
+            test_df,
+            ENGINEERED_TEST,
+        )
+
+        logger.info(
+            "Feature engineering completed successfully."
+        )
+
+        return train_df, test_df
+
+
 def main() -> None:
     """
     Standalone execution.
@@ -469,5 +461,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-      
