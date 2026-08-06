@@ -37,11 +37,26 @@ TEST_IDENTITY = RAW_DATA_DIR / "test_identity.csv"
 MERGED_TRAIN = PROCESSED_DATA_DIR / "merged_train.parquet"
 MERGED_TEST = PROCESSED_DATA_DIR / "merged_test.parquet"
 
-PREPROCESSED_TRAIN = PROCESSED_DATA_DIR / "preprocessed_train.parquet"
-PREPROCESSED_TEST = PROCESSED_DATA_DIR / "preprocessed_test.parquet"
+PREPROCESSED_TRAIN = (
+    PROCESSED_DATA_DIR / "preprocessed_train.parquet"
+)
+PREPROCESSED_TEST = (
+    PROCESSED_DATA_DIR / "preprocessed_test.parquet"
+)
 
-ENGINEERED_TRAIN = PROCESSED_DATA_DIR / "engineered_train.parquet"
-ENGINEERED_TEST = PROCESSED_DATA_DIR / "engineered_test.parquet"
+ENGINEERED_TRAIN = (
+    PROCESSED_DATA_DIR / "engineered_train.parquet"
+)
+ENGINEERED_TEST = (
+    PROCESSED_DATA_DIR / "engineered_test.parquet"
+)
+
+SELECTED_TRAIN = (
+    PROCESSED_DATA_DIR / "selected_train.parquet"
+)
+SELECTED_TEST = (
+    PROCESSED_DATA_DIR / "selected_test.parquet"
+)
 
 STACKING_MODEL = MODEL_DIR / "ensemble_model.joblib"
 
@@ -55,6 +70,9 @@ TEST_SIZE = 0.20
 N_FOLDS = 5
 
 TARGET = "isFraud"
+
+TOP_FEATURES = 200
+CORRELATION_THRESHOLD = 0.95
 
 # RISK SCORE
 
@@ -82,7 +100,10 @@ def create_directories() -> None:
     """
 
     for directory in DIRECTORIES:
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
 
 if __name__ == "__main__":
