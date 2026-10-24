@@ -163,3 +163,62 @@ def file_exists(file_path: Path) -> bool:
     """
 
     return file_path.exists()
+
+
+def categorical_columns(df: pd.DataFrame) -> list[str]:
+    """
+    Return the non-numeric (categorical) columns of a DataFrame.
+
+    Works for both the legacy ``object`` dtype and the ``str`` dtype
+    that pandas 3 uses by default for text columns.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+
+    Returns
+    -------
+    list[str]
+    """
+
+    return [
+        column
+        for column in df.columns
+        if not (
+            pd.api.types.is_numeric_dtype(df[column])
+            or pd.api.types.is_bool_dtype(df[column])
+        )
+    ]
+
+
+def time_split(
+    df: pd.DataFrame,
+    test_size: float,
+    time_column: str = "TransactionDT",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Split a DataFrame chronologically.
+
+    The most recent ``test_size`` share of rows becomes the holdout, which
+    mirrors how a fraud model is used in production (trained on the past,
+    scoring the future) and avoids the optimistic estimates a random split
+    gives on temporal data.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    test_size : float
+        Share of rows (0-1) to place in the holdout.
+    time_column : str
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame]
+        earlier rows, later rows
+    """
+
+    ordered = df.sort_values(time_column, kind="stable")
+
+    cut = int(round(len(ordered) * (1 - test_size)))
+
+    return ordered.iloc[:cut], ordered.iloc[cut:]

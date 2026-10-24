@@ -22,7 +22,6 @@ from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import (
     StratifiedKFold,
-    train_test_split,
     cross_val_score,
 )
 from sklearn.ensemble import StackingClassifier
@@ -31,15 +30,20 @@ from sklearn.preprocessing import OrdinalEncoder
 
 from config.config import (
     BASE_MODEL_DIR,
+    EXCLUDED_FEATURES,
+    LEARNING_RATE,
+    N_ESTIMATORS,
     N_FOLDS,
     RANDOM_STATE,
+    RUN_CROSS_VALIDATION,
     SELECTED_TRAIN,
     STACKING_MODEL,
     TARGET,
     TEST_SIZE,
+    THRESHOLD_SHARE,
 )
 from config.logging_config import get_logger
-from src.utils import load_parquet
+from src.utils import categorical_columns, load_parquet, time_split
 
 logger = get_logger(__name__)
 
@@ -152,36 +156,58 @@ class ModelTrainer:
         self,
         X: pd.DataFrame,
         y: pd.Series,
-    ) -> tuple[
-        pd.DataFrame,
-        pd.DataFrame,
-        pd.Series,
-        pd.Series,
-        float,
-    ]:
+    ) -> dict:
         """
-        Prepare data for model training.
+        Split the data chronologically for training and evaluation.
 
-        Performs the train/validation split only. Categorical encoding
-        is intentionally NOT done here - it is fitted later, inside the
-        training pipeline, using X_train only, so validation data (and
-        every cross-validation fold's held-out portion) never leaks into
-        the preprocessing step.
+        The IEEE-CIS data is ordered in time, and a deployed fraud model
+        always scores transactions that happen *after* the ones it was
+        trained on. A random split would leak future behaviour into
+        training and overstate performance, so:
+
+        - train     : the earliest (1 - TEST_SIZE) share of transactions
+        - threshold : the next part of the holdout, used only to tune the
+                      decision threshold
+        - test      : the most recent transactions, used only to report
+                      final metrics
+
+        Categorical encoding is NOT done here - it is fitted later,
+        inside the training pipeline, using X_train only.
         """
 
         logger.info(
-            "Preparing training data..."
+            "Preparing training data (time-based split)..."
         )
 
-        X_train, X_valid, y_train, y_valid = (
-            train_test_split(
-                X,
-                y,
-                test_size=TEST_SIZE,
-                stratify=y,
-                random_state=RANDOM_STATE,
+        data = X.copy()
+        data[TARGET] = y.values
+
+        if "TransactionDT" not in data.columns:
+            logger.warning(
+                "TransactionDT not available - assuming rows are "
+                "already in chronological order."
             )
+            data["TransactionDT"] = range(len(data))
+
+        train_df, holdout_df = time_split(data, TEST_SIZE)
+
+        threshold_df, test_df = time_split(
+            holdout_df,
+            1 - THRESHOLD_SHARE,
         )
+
+        def split_xy(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+            return (
+                frame.drop(
+                    columns=[TARGET] + EXCLUDED_FEATURES,
+                    errors="ignore",
+                ),
+                frame[TARGET],
+            )
+
+        X_train, y_train = split_xy(train_df)
+        X_threshold, y_threshold = split_xy(threshold_df)
+        X_test, y_test = split_xy(test_df)
 
         positive_count = int((y_train == 1).sum())
         negative_count = int((y_train == 0).sum())
@@ -201,13 +227,11 @@ class ModelTrainer:
         scale_pos_weight = negative_count / positive_count
 
         logger.info(
-            "Training samples: %d",
+            "Training samples: %d | Threshold samples: %d | "
+            "Test samples: %d",
             len(X_train),
-        )
-
-        logger.info(
-            "Validation samples: %d",
-            len(X_valid),
+            len(X_threshold),
+            len(X_test),
         )
 
         logger.info(
@@ -225,18 +249,22 @@ class ModelTrainer:
             scale_pos_weight,
         )
 
-        return (
-            X_train,
-            X_valid,
-            y_train,
-            y_valid,
-            scale_pos_weight,
-        )
+        return {
+            "X_train": X_train,
+            "y_train": y_train,
+            "X_threshold": X_threshold,
+            "y_threshold": y_threshold,
+            "X_test": X_test,
+            "y_test": y_test,
+            "scale_pos_weight": scale_pos_weight,
+        }
 
     def build_models(
         self,
         X_train: pd.DataFrame,
         scale_pos_weight: float,
+        n_estimators: int = N_ESTIMATORS,
+        n_folds: int = N_FOLDS,
     ) -> Pipeline:
         """
         Build the preprocessing step, the base learners, and the
@@ -252,18 +280,11 @@ class ModelTrainer:
             "Building ensemble models..."
         )
 
-        categorical_columns = (
-            X_train.select_dtypes(
-                include=[
-                    "object",
-                    "category",
-                ]
-            ).columns.tolist()
-        )
+        categorical_features = categorical_columns(X_train)
 
         logger.info(
             "Categorical columns detected: %s",
-            categorical_columns,
+            categorical_features,
         )
 
         preprocessing = ColumnTransformer(
@@ -273,28 +294,41 @@ class ModelTrainer:
                     OrdinalEncoder(
                         handle_unknown="use_encoded_value",
                         unknown_value=-1,
+                        encoded_missing_value=-1,
                     ),
-                    categorical_columns,
+                    categorical_features,
                 ),
             ],
             remainder="passthrough",
             verbose_feature_names_out=False,
         )
 
+        # Each base learner uses all CPU cores itself; the stacking
+        # ensemble therefore fits them one at a time (n_jobs=1) to avoid
+        # oversubscribing the CPU with nested parallelism.
+
         lightgbm_model = lgb.LGBMClassifier(
             objective="binary",
-            n_estimators=300,
-            learning_rate=0.05,
+            n_estimators=n_estimators,
+            learning_rate=LEARNING_RATE,
+            num_leaves=127,
+            subsample=0.8,
+            subsample_freq=1,
+            colsample_bytree=0.6,
             random_state=RANDOM_STATE,
             scale_pos_weight=scale_pos_weight,
             n_jobs=-1,
+            verbose=-1,
         )
 
         xgboost_model = XGBClassifier(
             objective="binary:logistic",
-            eval_metric="logloss",
-            n_estimators=300,
-            learning_rate=0.05,
+            eval_metric="aucpr",
+            n_estimators=n_estimators,
+            learning_rate=LEARNING_RATE,
+            max_depth=8,
+            subsample=0.8,
+            colsample_bytree=0.6,
             random_state=RANDOM_STATE,
             scale_pos_weight=scale_pos_weight,
             tree_method="hist",
@@ -302,10 +336,13 @@ class ModelTrainer:
         )
 
         catboost_model = CatBoostClassifier(
-            iterations=300,
-            learning_rate=0.05,
+            iterations=n_estimators,
+            learning_rate=LEARNING_RATE * 2,
+            depth=8,
             random_seed=RANDOM_STATE,
             auto_class_weights="Balanced",
+            thread_count=-1,
+            allow_writing_files=False,
             verbose=False,
         )
 
@@ -334,11 +371,11 @@ class ModelTrainer:
                 estimators=base_models,
                 final_estimator=meta_model,
                 cv=StratifiedKFold(
-                    n_splits=N_FOLDS,
+                    n_splits=n_folds,
                     shuffle=True,
                     random_state=RANDOM_STATE,
                 ),
-                n_jobs=-1,
+                n_jobs=1,
                 passthrough=False,
             )
         )
@@ -363,7 +400,10 @@ class ModelTrainer:
         y_train: pd.Series,
     ) -> float:
         """
-        Perform stratified cross-validation.
+        Perform stratified cross-validation (PR-AUC).
+
+        Optional and slow: it refits the whole stacked ensemble N_FOLDS
+        times. Enable with RUN_CROSS_VALIDATION in config.
 
         model is the full preprocessing + stacking pipeline, so every
         fold fits its own preprocessing on that fold's training portion
@@ -384,17 +424,17 @@ class ModelTrainer:
                 shuffle=True,
                 random_state=RANDOM_STATE,
             ),
-            scoring="f1",
-            n_jobs=-1,
+            scoring="average_precision",
+            n_jobs=1,
         )
 
         logger.info(
-            "Cross-validation F1 scores: %s",
+            "Cross-validation PR-AUC scores: %s",
             scores,
         )
 
         logger.info(
-            "Mean F1 Score: %.4f",
+            "Mean PR-AUC: %.4f",
             scores.mean(),
         )
 
@@ -408,7 +448,7 @@ class ModelTrainer:
     ) -> Pipeline:
         """
         Train the full preprocessing + stacking pipeline on the
-        training dataset only (never on X_valid / y_valid).
+        training dataset only (never on the threshold or test sets).
         """
 
         logger.info(
@@ -519,9 +559,38 @@ class ModelTrainer:
             STACKING_MODEL,
         )
 
-    def run(self) -> Pipeline:
+    def fit(
+        self,
+        splits: dict,
+    ) -> Pipeline:
+        """
+        Build, optionally cross-validate, and train the ensemble.
+        """
+
+        pipeline = self.build_models(
+            splits["X_train"],
+            splits["scale_pos_weight"],
+        )
+
+        if RUN_CROSS_VALIDATION:
+            self.cross_validate(
+                pipeline,
+                splits["X_train"],
+                splits["y_train"],
+            )
+
+        return self.train_model(
+            pipeline,
+            splits["X_train"],
+            splits["y_train"],
+        )
+
+    def run(self) -> tuple[Pipeline, dict]:
         """
         Execute the complete model training pipeline.
+
+        Returns the fitted pipeline and the data splits (the threshold
+        and test splits are used downstream for evaluation).
         """
 
         logger.info(
@@ -530,39 +599,12 @@ class ModelTrainer:
 
         X, y = self.load_data()
 
-        (
-            X_train,
-            X_valid,
-            y_train,
-            y_valid,
-            scale_pos_weight,
-        ) = self.prepare_data(
+        splits = self.prepare_data(
             X,
             y,
         )
 
-        pipeline = self.build_models(
-            X_train,
-            scale_pos_weight,
-        )
-
-        cv_score = self.cross_validate(
-            pipeline,
-            X_train,
-            y_train,
-        )
-
-        logger.info(
-            "Cross-validation completed. "
-            "Mean F1 Score: %.4f",
-            cv_score,
-        )
-
-        pipeline = self.train_model(
-            pipeline,
-            X_train,
-            y_train,
-        )
+        pipeline = self.fit(splits)
 
         self.save_base_models(
             pipeline
@@ -576,12 +618,7 @@ class ModelTrainer:
             "Model training pipeline completed successfully."
         )
 
-        logger.info(
-            "Validation dataset retained for "
-            "downstream model evaluation."
-        )
-
-        return pipeline
+        return pipeline, splits
 
 
 def main() -> None:
@@ -591,7 +628,7 @@ def main() -> None:
 
     trainer = ModelTrainer()
 
-    model = trainer.run()
+    model, _ = trainer.run()
 
     print("\nModel Training Summary")
     print("-" * 40)

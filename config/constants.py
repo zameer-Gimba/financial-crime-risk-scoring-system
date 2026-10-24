@@ -50,13 +50,16 @@ TRANSACTION_ID = "TransactionID"
 
 # COLORS
 
-LOW_COLOR = "#2ECC71"
+# Status palette (good / warning / serious / critical). Always shown
+# together with the category label, never as color alone.
 
-MEDIUM_COLOR = "#F1C40F"
+LOW_COLOR = "#0CA30C"
 
-HIGH_COLOR = "#E67E22"
+MEDIUM_COLOR = "#FAB219"
 
-CRITICAL_COLOR = "#E74C3C"
+HIGH_COLOR = "#EC835A"
+
+CRITICAL_COLOR = "#D03B3B"
 
 # REPORT
 

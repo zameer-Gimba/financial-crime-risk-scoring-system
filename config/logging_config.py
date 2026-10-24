@@ -5,7 +5,6 @@ Author: Muhammad Ibrahim Gimba
 """
 
 import logging
-from pathlib import Path
 
 from config.config import LOG_DIR
 

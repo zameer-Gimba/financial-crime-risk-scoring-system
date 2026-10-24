@@ -5,29 +5,39 @@ Risk Scoring System.
 Responsible for selecting the most informative features
 before model training.
 
+Selection is fitted on the chronological training portion only (never on
+the evaluation holdout), and the result is a list of column names that
+is applied identically to every dataset.
+
 Author: Muhammad Ibrahim Gimba
 """
 
 from __future__ import annotations
 
-import pandas as pd
-import numpy as np
 import lightgbm as lgb
+import numpy as np
+import pandas as pd
 
 from config.config import (
+    CORRELATION_SAMPLE_SIZE,
     CORRELATION_THRESHOLD,
     ENGINEERED_TEST,
     ENGINEERED_TRAIN,
+    EXCLUDED_FEATURES,
+    FEATURE_IMPORTANCE_REPORT,
     RANDOM_STATE,
     SELECTED_TEST,
     SELECTED_TRAIN,
     TARGET,
+    TEST_SIZE,
     TOP_FEATURES,
 )
 from config.logging_config import get_logger
 from src.utils import (
+    categorical_columns,
     load_parquet,
     save_dataframe,
+    time_split,
 )
 
 logger = get_logger(__name__)
@@ -38,109 +48,105 @@ class FeatureSelector:
     Perform feature selection on engineered datasets.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        top_features: int = TOP_FEATURES,
+    ) -> None:
+        self.top_features = top_features
+        self.selected_features_: list[str] = []
+        self.importance_: pd.DataFrame | None = None
+
         logger.info(
             "FeatureSelector initialized."
         )
 
     @staticmethod
-    def remove_constant_features(
+    def candidate_features(
         dataframe: pd.DataFrame,
-    ) -> pd.DataFrame:
+    ) -> list[str]:
         """
-        Remove features containing only one unique value.
+        All columns except the target and excluded identifiers.
         """
 
-        logger.info(
-            "Removing constant features..."
-        )
-
-        df = dataframe.copy()
-
-        constant_columns = [
+        return [
             column
-            for column in df.columns
-            if df[column].nunique(dropna=False) <= 1
+            for column in dataframe.columns
+            if column != TARGET
+            and column not in EXCLUDED_FEATURES
         ]
 
-        if constant_columns:
+    @staticmethod
+    def find_constant_features(
+        dataframe: pd.DataFrame,
+    ) -> list[str]:
+        """
+        Features containing only one unique value.
+        """
 
-            logger.info(
-                "Removed %d constant features.",
-                len(constant_columns),
-            )
-
-            df = df.drop(
-                columns=constant_columns
-            )
-
-        return df
+        return [
+            column
+            for column in dataframe.columns
+            if dataframe[column].nunique(dropna=False) <= 1
+        ]
 
     @staticmethod
-    def remove_duplicate_features(
+    def find_duplicate_features(
         dataframe: pd.DataFrame,
-    ) -> pd.DataFrame:
+    ) -> list[str]:
         """
-        Remove duplicate columns.
+        Columns that are exact copies of an earlier column.
+
+        Columns are bucketed by a content hash first, so only columns
+        with matching hashes are compared in full (instead of comparing
+        every pair of the ~500 columns).
         """
 
-        logger.info(
-            "Removing duplicate features..."
-        )
-
-        df = dataframe.copy()
+        buckets: dict[int, list[str]] = {}
 
         duplicated_columns = []
 
-        columns = df.columns
+        for column in dataframe.columns:
 
-        for index, column in enumerate(columns):
-
-            for other_column in columns[index + 1:]:
-
-                if df[column].equals(
-                    df[other_column]
-                ):
-
-                    duplicated_columns.append(
-                        other_column
-                    )
-
-        if duplicated_columns:
-
-            logger.info(
-                "Removed %d duplicated features.",
-                len(duplicated_columns),
+            digest = int(
+                pd.util.hash_pandas_object(
+                    dataframe[column],
+                    index=False,
+                ).sum()
             )
 
-            df = df.drop(
-                columns=duplicated_columns
-            )
+            candidates = buckets.setdefault(digest, [])
 
-        return df
-      
+            if any(
+                dataframe[column].equals(dataframe[other])
+                for other in candidates
+            ):
+                duplicated_columns.append(column)
+            else:
+                candidates.append(column)
+
+        return duplicated_columns
+
     @staticmethod
-    def remove_correlated_features(
+    def find_correlated_features(
         dataframe: pd.DataFrame,
         threshold: float = CORRELATION_THRESHOLD,
-    ) -> pd.DataFrame:
+    ) -> list[str]:
         """
-        Remove highly correlated numeric features.
+        Numeric features highly correlated with an earlier feature.
+
+        Correlations are computed on a row sample to bound memory/time.
         """
 
-        logger.info(
-            "Removing highly correlated features..."
-        )
+        numeric_df = dataframe.select_dtypes(include=["number"])
 
-        df = dataframe.copy()
-        
-        numeric_df = (
-          df.select_dtypes(include=["number"])
-          .drop(columns=[TARGET], errors="ignore")
-        )
+        if len(numeric_df) > CORRELATION_SAMPLE_SIZE:
+            numeric_df = numeric_df.sample(
+                CORRELATION_SAMPLE_SIZE,
+                random_state=RANDOM_STATE,
+            )
 
         correlation_matrix = (
-            numeric_df.corr().abs()
+            numeric_df.astype("float32").corr().abs()
         )
 
         upper_triangle = correlation_matrix.where(
@@ -152,27 +158,146 @@ class FeatureSelector:
             ).astype(bool)
         )
 
-        correlated_columns = [
+        return [
             column
             for column in upper_triangle.columns
-            if any(
-                upper_triangle[column]
-                > threshold
-            )
+            if (upper_triangle[column] > threshold).any()
         ]
 
-        if correlated_columns:
+    def filter_features(
+        self,
+        dataframe: pd.DataFrame,
+    ) -> list[str]:
+        """
+        Remove constant, duplicated and highly correlated features.
+        """
 
-            logger.info(
-                "Removed %d correlated features.",
-                len(correlated_columns),
+        logger.info(
+            "Starting feature filtering..."
+        )
+
+        features = self.candidate_features(dataframe)
+
+        constant = self.find_constant_features(dataframe[features])
+        features = [f for f in features if f not in set(constant)]
+        logger.info("Removed %d constant features.", len(constant))
+
+        duplicated = self.find_duplicate_features(dataframe[features])
+        features = [f for f in features if f not in set(duplicated)]
+        logger.info("Removed %d duplicated features.", len(duplicated))
+
+        correlated = self.find_correlated_features(dataframe[features])
+        features = [f for f in features if f not in set(correlated)]
+        logger.info("Removed %d correlated features.", len(correlated))
+
+        logger.info(
+            "Remaining Features: %d",
+            len(features),
+        )
+
+        return features
+
+    def rank_features(
+        self,
+        dataframe: pd.DataFrame,
+        features: list[str],
+    ) -> pd.DataFrame:
+        """
+        Rank features by LightGBM gain importance.
+
+        Categorical columns are passed as pandas ``category`` so LightGBM
+        handles them natively - no separate (and potentially inconsistent)
+        integer encoding is needed.
+        """
+
+        logger.info(
+            "Training LightGBM for feature ranking..."
+        )
+
+        X_train = dataframe[features].copy()
+
+        y_train = dataframe[TARGET]
+
+        for column in categorical_columns(X_train):
+            X_train[column] = X_train[column].astype("category")
+
+        model = lgb.LGBMClassifier(
+            objective="binary",
+            random_state=RANDOM_STATE,
+            n_estimators=300,
+            learning_rate=0.05,
+            num_leaves=63,
+            n_jobs=-1,
+            verbose=-1,
+        )
+
+        model.fit(
+            X_train,
+            y_train,
+        )
+
+        importance = pd.DataFrame(
+            {
+                "feature": features,
+                "importance": model.booster_.feature_importance(
+                    importance_type="gain"
+                ),
+            }
+        )
+
+        return (
+            importance
+            .sort_values(
+                by="importance",
+                ascending=False,
             )
-
-            df = df.drop(
-                columns=correlated_columns
+            .reset_index(
+                drop=True
             )
+        )
 
-        return df
+    def fit(
+        self,
+        dataframe: pd.DataFrame,
+    ) -> "FeatureSelector":
+        """
+        Choose the top features using the training data.
+        """
+
+        features = self.filter_features(dataframe)
+
+        self.importance_ = self.rank_features(dataframe, features)
+
+        self.selected_features_ = (
+            self.importance_
+            .head(self.top_features)["feature"]
+            .tolist()
+        )
+
+        logger.info(
+            "Selected %d features.",
+            len(self.selected_features_),
+        )
+
+        return self
+
+    def transform(
+        self,
+        dataframe: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Keep the selected features, plus the target and TransactionDT
+        when present (TransactionDT is carried only so the training
+        step can split chronologically; it is never a model input).
+        """
+
+        columns = self.selected_features_ + [
+            column
+            for column in ["TransactionDT", TARGET]
+            if column in dataframe.columns
+        ]
+
+        return dataframe[columns]
 
     def load_data(
         self,
@@ -194,10 +319,6 @@ class FeatureSelector:
         )
 
         logger.info(
-            "Datasets loaded successfully."
-        )
-
-        logger.info(
             "Training Shape: %s",
             train_df.shape,
         )
@@ -209,172 +330,6 @@ class FeatureSelector:
 
         return train_df, test_df
 
-    def preprocess_features(
-        self,
-        train_df: pd.DataFrame,
-        test_df: pd.DataFrame,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Execute feature filtering before
-        feature importance ranking.
-        """
-
-        logger.info(
-            "Starting feature filtering..."
-        )
-
-        train_df = self.remove_constant_features(
-            train_df
-        )
-
-        train_df = self.remove_duplicate_features(
-            train_df
-        )
-
-        train_df = self.remove_correlated_features(
-            train_df
-        )
-
-        common_columns = [
-            column
-            for column in train_df.columns
-            if column == TARGET
-            or column in test_df.columns
-        ]
-
-        train_df = train_df[
-            common_columns
-        ]
-
-        test_df = test_df[
-            [
-                column
-                for column in common_columns
-                if column != TARGET
-            ]
-        ]
-
-        logger.info(
-            "Feature filtering completed."
-        )
-
-        logger.info(
-            "Remaining Features: %d",
-            len(train_df.columns) - 1,
-        )
-
-        return train_df, test_df
-      
-    def select_top_features(
-        self,
-        train_df: pd.DataFrame,
-        test_df: pd.DataFrame,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Select the most important features using
-        LightGBM feature importance.
-        """
-
-        logger.info(
-            "Selecting top features..."
-        )
-
-        X_train = train_df.drop(
-            columns=[TARGET]
-        )
-
-        y_train = train_df[TARGET]
-
-        categorical_columns = (
-            X_train.select_dtypes(
-                include=[
-                    "object",
-                    "category",
-                ]
-            ).columns
-        )
-
-        for column in categorical_columns:
-
-            X_train[column] = (
-                X_train[column]
-                .astype("category")
-                .cat.codes
-            )
-
-            if column in test_df.columns:
-
-                test_df[column] = (
-                    test_df[column]
-                    .astype("category")
-                    .cat.codes
-                )
-
-        model = lgb.LGBMClassifier(
-            objective="binary",
-            random_state=RANDOM_STATE,
-            n_estimators=300,
-            learning_rate=0.05,
-            n_jobs=-1,
-        )
-
-        logger.info(
-            "Training LightGBM for feature selection..."
-        )
-
-        model.fit(
-            X_train,
-            y_train,
-            categorical_feature=list(categorical_columns),
-        )
-
-        importance = pd.DataFrame(
-            {
-                "feature": X_train.columns,
-                "importance": (
-                    model.feature_importances_
-                ),
-            }
-        )
-
-        importance = (
-            importance
-            .sort_values(
-                by="importance",
-                ascending=False,
-            )
-            .reset_index(
-                drop=True
-            )
-        )
-
-        selected_features = (
-            importance
-            .head(TOP_FEATURES)[
-                "feature"
-            ]
-            .tolist()
-        )
-
-        logger.info(
-            "Selected %d features.",
-            len(selected_features),
-        )
-
-        selected_train = train_df[
-            selected_features + [TARGET]
-        ]
-
-        selected_test = test_df[
-            selected_features
-        ]
-
-        return (
-            selected_train,
-            selected_test,
-        )
-
-  
     def run(
         self,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -389,19 +344,13 @@ class FeatureSelector:
 
         train_df, test_df = self.load_data()
 
-        train_df, test_df = (
-            self.preprocess_features(
-                train_df,
-                test_df,
-            )
-        )
+        fit_df, _ = time_split(train_df, TEST_SIZE)
 
-        selected_train, selected_test = (
-            self.select_top_features(
-                train_df,
-                test_df,
-            )
-        )
+        self.fit(fit_df)
+
+        selected_train = self.transform(train_df)
+
+        selected_test = self.transform(test_df)
 
         save_dataframe(
             selected_train,
@@ -413,8 +362,14 @@ class FeatureSelector:
             SELECTED_TEST,
         )
 
-        logger.info(
-            "Selected datasets saved successfully."
+        FEATURE_IMPORTANCE_REPORT.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        self.importance_.to_csv(
+            FEATURE_IMPORTANCE_REPORT,
+            index=False,
         )
 
         logger.info(
@@ -431,7 +386,6 @@ class FeatureSelector:
             selected_train,
             selected_test,
         )
-
 
 
 def main() -> None:

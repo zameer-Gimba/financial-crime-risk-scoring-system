@@ -60,19 +60,66 @@ SELECTED_TEST = (
 
 STACKING_MODEL = MODEL_DIR / "ensemble_model.joblib"
 
+# Single deployable artifact: fitted preprocessing, feature engineering,
+# selected features, ensemble pipeline, decision threshold and metadata.
+MODEL_BUNDLE = MODEL_DIR / "fraud_risk_model.joblib"
+
+# DEPLOYMENT ASSETS (small files committed for the Streamlit app)
+
+SAMPLE_DIR = DATA_DIR / "sample"
+SAMPLE_TRANSACTIONS = SAMPLE_DIR / "sample_transactions.csv"
+
+METRICS_REPORT = REPORT_DIR / "metrics.json"
+PR_CURVE_REPORT = REPORT_DIR / "pr_curve.csv"
+ROC_CURVE_REPORT = REPORT_DIR / "roc_curve.csv"
+GLOBAL_SHAP_REPORT = REPORT_DIR / "global_shap_importance.csv"
+FEATURE_IMPORTANCE_REPORT = REPORT_DIR / "feature_importance.csv"
+
 # RANDOMNESS
 
 RANDOM_STATE = 42
 
 # TRAINING
 
+# The IEEE-CIS data is temporal, so the holdout is the most recent
+# TEST_SIZE share of training transactions (ordered by TransactionDT).
+# The holdout is split again in time: the first THRESHOLD_SHARE is used
+# to tune the decision threshold, the remainder for final reporting.
 TEST_SIZE = 0.20
+THRESHOLD_SHARE = 0.50
 N_FOLDS = 5
+
+# Full cross-validation of the stacked ensemble refits it N_FOLDS times
+# on top of the stack's own internal CV. Off by default (slow).
+RUN_CROSS_VALIDATION = False
+
+N_ESTIMATORS = 400
+LEARNING_RATE = 0.05
 
 TARGET = "isFraud"
 
 TOP_FEATURES = 100
 CORRELATION_THRESHOLD = 0.95
+
+# Correlation filtering on a row sample keeps memory and time bounded.
+CORRELATION_SAMPLE_SIZE = 100_000
+
+# Columns never used as model inputs: identifiers and raw timestamps are
+# monotonic in time and do not generalise to future transactions.
+EXCLUDED_FEATURES = [
+    "TransactionID",
+    "TransactionDT",
+]
+
+# EXPLAINABILITY
+
+SHAP_SAMPLE_SIZE = 2_000
+TOP_EXPLANATION_FEATURES = 10
+
+# SAMPLE DATA FOR THE DASHBOARD
+
+SAMPLE_FRAUD_ROWS = 150
+SAMPLE_LEGIT_ROWS = 350
 
 # RISK SCORE
 
@@ -84,6 +131,7 @@ HIGH_RISK_MAX = 74
 
 DIRECTORIES = [
     RAW_DATA_DIR,
+    SAMPLE_DIR,
     PROCESSED_DATA_DIR,
     MODEL_DIR,
     BASE_MODEL_DIR,

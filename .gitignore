@@ -30,11 +30,16 @@ logs/
 *.log
 
 # Models
+# The deployable bundle models/fraud_risk_model.joblib IS committed (the
+# Streamlit app needs it); intermediate model files are not.
 models/*.pkl
 models/*.joblib
 models/*.bin
+!models/fraud_risk_model.joblib
+models/base_models/
 
 # Reports
+# metrics.json, *_curve.csv and *_importance.csv are committed for the app.
 reports/*.pdf
 reports/*.html
 
