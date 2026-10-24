@@ -439,16 +439,21 @@ def page_batch(predictor: FraudRiskPredictor) -> None:
         f"missing values. Up to {MAX_BATCH_ROWS:,} rows per file."
     )
 
-    upload = st.file_uploader("CSV file", type=["csv"])
-    use_sample = st.toggle("Use the bundled sample instead", value=upload is None)
+    source = st.radio(
+        "Data source",
+        ["Bundled sample (500 transactions)", "Upload my own CSV"],
+        horizontal=True,
+    )
 
-    if upload is not None and not use_sample:
+    if source == "Upload my own CSV":
+        upload = st.file_uploader("CSV file", type=["csv"])
+        if upload is None:
+            st.info("Upload a CSV file to score it.")
+            return
         data = pd.read_csv(upload, nrows=MAX_BATCH_ROWS)
-    elif use_sample:
-        data = load_csv(str(SAMPLE_TRANSACTIONS))
+        st.caption(f"Loaded {len(data):,} rows from {upload.name}.")
     else:
-        st.info("Upload a CSV file or use the bundled sample.")
-        return
+        data = load_csv(str(SAMPLE_TRANSACTIONS))
 
     required = {"TransactionAmt", "TransactionDT"}
     missing = required - set(data.columns)
