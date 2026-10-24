@@ -48,8 +48,9 @@ data/processed/*
 !data/processed/.gitkeep
 
 # Raw Data
-# Uncomment if you don't want to upload the dataset
-# data/raw/*
+# The IEEE-CIS dataset is downloaded from Kaggle (see README), not committed.
+data/raw/*
+!data/raw/.gitkeep
 
 # OS
 .DS_Store

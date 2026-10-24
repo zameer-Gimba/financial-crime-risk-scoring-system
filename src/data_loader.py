@@ -25,6 +25,23 @@ from src.utils import load_csv
 
 logger = get_logger(__name__)
 
+DATASET_URL = "https://www.kaggle.com/c/ieee-fraud-detection/data"
+
+
+def load_raw_csv(file_path) -> pd.DataFrame:
+    """
+    Load one raw IEEE-CIS file with a helpful error if it is missing.
+    """
+
+    if not file_path.exists():
+        raise FileNotFoundError(
+            f"{file_path} not found. Download the IEEE-CIS Fraud Detection "
+            f"dataset from {DATASET_URL} and extract the CSV files into "
+            f"{file_path.parent} (see README: 'Getting the data')."
+        )
+
+    return prepare_raw(load_csv(file_path))
+
 
 def normalize_columns(
     dataframe: pd.DataFrame,
@@ -109,7 +126,7 @@ class DataLoader:
             Training transaction dataset.
         """
         logger.info("Loading training transaction dataset...")
-        return prepare_raw(load_csv(TRAIN_TRANSACTION))
+        return load_raw_csv(TRAIN_TRANSACTION)
 
     def load_train_identity(self) -> pd.DataFrame:
         """
@@ -121,7 +138,7 @@ class DataLoader:
             Training identity dataset.
         """
         logger.info("Loading training identity dataset...")
-        return prepare_raw(load_csv(TRAIN_IDENTITY))
+        return load_raw_csv(TRAIN_IDENTITY)
 
     def load_test_transaction(self) -> pd.DataFrame:
         """
@@ -133,7 +150,7 @@ class DataLoader:
             Test transaction dataset.
         """
         logger.info("Loading test transaction dataset...")
-        return prepare_raw(load_csv(TEST_TRANSACTION))
+        return load_raw_csv(TEST_TRANSACTION)
 
     def load_test_identity(self) -> pd.DataFrame:
         """
@@ -145,7 +162,7 @@ class DataLoader:
             Test identity dataset.
         """
         logger.info("Loading test identity dataset...")
-        return prepare_raw(load_csv(TEST_IDENTITY))
+        return load_raw_csv(TEST_IDENTITY)
 
     def load_all(self) -> Dict[str, pd.DataFrame]:
         """

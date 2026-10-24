@@ -78,12 +78,23 @@ pytest                              # tests
 
 The trained model, evaluation reports and a 500-transaction demo sample are committed, so the dashboard runs without downloading the 1.3 GB dataset.
 
-## Retraining
+## Getting the data
 
-The raw data is stored with Git LFS:
+The raw dataset (~1.3 GB) is not stored in this repository. Download it from the
+[IEEE-CIS Fraud Detection competition on Kaggle](https://www.kaggle.com/c/ieee-fraud-detection/data)
+(you must sign in and accept the competition rules), then extract the CSVs into `data/raw/`:
 
 ```bash
-git lfs pull                          # downloads data/raw/*.csv (~1.3 GB)
+pip install kaggle                    # needs an API token in ~/.kaggle/kaggle.json
+kaggle competitions download -c ieee-fraud-detection -p data/raw
+unzip data/raw/ieee-fraud-detection.zip -d data/raw
+```
+
+Expected files: `train_transaction.csv`, `train_identity.csv`, `test_transaction.csv`, `test_identity.csv`.
+
+## Retraining
+
+```bash
 python -m src.pipeline                # full run, ~20 min on 4 CPU cores
 python -m src.pipeline --nrows 100000 --n-estimators 50   # quick experiment
 ```
@@ -111,7 +122,7 @@ The individual stages can still be run on their own (`python -m src.merge_data`,
 4. Under **Advanced settings**, choose **Python 3.12** (the version the model was trained with).
 5. Deploy. The first build installs the pinned requirements (a few minutes).
 
-> **Git LFS note.** The raw CSVs (~1.3 GB) are in Git LFS. The app does not need them. If your GitHub LFS bandwidth quota is a concern, consider moving the raw data out of the repository (the dataset is freely available on [Kaggle](https://www.kaggle.com/c/ieee-fraud-detection/data)) - CI is already configured not to download it.
+The app only needs the committed model, reports and demo sample, so deployment is fast and does not touch the raw dataset.
 
 ---
 
@@ -241,7 +252,7 @@ financial-crime-risk-scoring-system/
 │   └── pipeline.py           # end-to-end training
 ├── models/                   # fraud_risk_model.joblib
 ├── reports/                  # metrics and curves
-├── data/raw/                 # IEEE-CIS CSVs (Git LFS)
+├── data/raw/                 # IEEE-CIS CSVs (download from Kaggle)
 ├── data/sample/              # demo transactions
 ├── docs/ARCHITECTURE.md
 └── tests/
