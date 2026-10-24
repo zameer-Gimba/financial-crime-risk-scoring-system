@@ -78,24 +78,25 @@ pytest                              # tests
 
 The trained model, evaluation reports and a 500-transaction demo sample are committed, so the dashboard runs without downloading the 1.3 GB dataset.
 
-## Getting the data
+## Getting the data (only needed for retraining)
 
-The raw dataset (~1.3 GB) is not stored in this repository. Download it from the
-[IEEE-CIS Fraud Detection competition on Kaggle](https://www.kaggle.com/c/ieee-fraud-detection/data)
-(you must sign in and accept the competition rules), then extract the CSVs into `data/raw/`:
+The dashboard does **not** need the raw dataset. It is only used to retrain, and the
+training pipeline downloads it from [Kaggle](https://www.kaggle.com/c/ieee-fraud-detection/data)
+automatically when it is missing. One-time setup:
 
-```bash
-pip install kaggle                    # needs an API token in ~/.kaggle/kaggle.json
-kaggle competitions download -c ieee-fraud-detection -p data/raw
-unzip data/raw/ieee-fraud-detection.zip -d data/raw
-```
+1. Join the competition and accept its rules: https://www.kaggle.com/c/ieee-fraud-detection/rules
+2. Create an API token at https://www.kaggle.com/settings/api and make it available:
+   ```bash
+   export KAGGLE_API_TOKEN=<your-token>     # or save it to ~/.kaggle/access_token
+   ```
 
-Expected files: `train_transaction.csv`, `train_identity.csv`, `test_transaction.csv`, `test_identity.csv`.
+To download without training: `python -m src.download_data` (add `--all` for the unlabelled Kaggle test files).
+You can also download the CSVs manually and extract them into `data/raw/`.
 
 ## Retraining
 
 ```bash
-python -m src.pipeline                # full run, ~20 min on 4 CPU cores
+python -m src.pipeline                # downloads data if missing, then full run, ~20 min on 4 CPU cores
 python -m src.pipeline --nrows 100000 --n-estimators 50   # quick experiment
 ```
 
@@ -237,6 +238,7 @@ financial-crime-risk-scoring-system/
 ├── streamlit_app.py          # dashboard entry point
 ├── config/                   # paths, settings, constants, logging
 ├── src/
+│   ├── download_data.py      # fetch IEEE-CIS CSVs from Kaggle
 │   ├── data_loader.py        # load + normalise raw CSVs
 │   ├── merge_data.py         # transaction ⋈ identity
 │   ├── data_validation.py    # schema / duplicate / missing checks

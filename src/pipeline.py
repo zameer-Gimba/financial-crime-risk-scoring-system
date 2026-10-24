@@ -12,6 +12,9 @@ dashboard needs:
 - reports/feature_importance.csv       feature selection ranking
 - data/sample/sample_transactions.csv  demo transactions for the app
 
+Missing raw data is downloaded from Kaggle automatically (see
+src/download_data.py for the one-time Kaggle token setup).
+
 Usage:
     python -m src.pipeline                      # full training run
     python -m src.pipeline --nrows 100000 --n-estimators 50   # quick run
@@ -47,6 +50,7 @@ from config.constants import TRANSACTION_ID
 from config.logging_config import get_logger
 from src.data_loader import DataLoader
 from src.data_validation import DataValidator
+from src.download_data import download_dataset
 from src.evaluation import ModelEvaluator
 from src.explainability import EnsembleExplainer
 from src.feature_engineering import FeatureEngineer
@@ -93,6 +97,8 @@ class TrainingPipeline:
             logger.info("Reusing merged training data at %s", MERGED_TRAIN)
             merged = load_parquet(MERGED_TRAIN)
         else:
+            # Fetches the CSVs from Kaggle if they are not in data/raw yet.
+            download_dataset()
             loader = DataLoader()
             merged = DataMerger.merge_train_data(
                 loader.load_train_transaction(),
