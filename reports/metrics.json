@@ -1,0 +1,101 @@
+{
+  "threshold": 0.4016068843117209,
+  "threshold_objective": "F1",
+  "test_metrics": {
+    "threshold": 0.4016068843117209,
+    "precision": 0.6933962264150944,
+    "recall": 0.464979665612291,
+    "f1": 0.5566675682986205,
+    "pr_auc": 0.5566133292531575,
+    "roc_auc": 0.9110610930119059,
+    "balanced_accuracy": 0.7284874401670294,
+    "specificity": 0.9919952147217678,
+    "false_positive_rate": 0.008004785278232262,
+    "false_negative_rate": 0.535020334387709,
+    "confusion_matrix": {
+      "tn": 56386,
+      "fp": 455,
+      "fn": 1184,
+      "tp": 1029
+    },
+    "samples": 59054,
+    "fraud_rate": 0.03747417617773563
+  },
+  "threshold_split_metrics": {
+    "threshold": 0.4016068843117209,
+    "precision": 0.7278063096111519,
+    "recall": 0.5359265262020529,
+    "f1": 0.6172993154947106,
+    "pr_auc": 0.6309001246010758,
+    "roc_auc": 0.9305705056611061,
+    "balanced_accuracy": 0.7647204261868786,
+    "specificity": 0.9935143261717043,
+    "false_positive_rate": 0.006485673828295718,
+    "false_negative_rate": 0.46407347379794706,
+    "confusion_matrix": {
+      "tn": 56832,
+      "fp": 371,
+      "fn": 859,
+      "tp": 992
+    },
+    "samples": 59054,
+    "fraud_rate": 0.03134419345006265
+  },
+  "model_comparison": {
+    "lightgbm": {
+      "pr_auc": 0.5568006131291328,
+      "roc_auc": 0.9107212703342189
+    },
+    "xgboost": {
+      "pr_auc": 0.5328002698904225,
+      "roc_auc": 0.8948313047041989
+    },
+    "catboost": {
+      "pr_auc": 0.5276855270996543,
+      "roc_auc": 0.895950630329887
+    },
+    "stacking_ensemble": {
+      "pr_auc": 0.5566133292531575,
+      "roc_auc": 0.9110610930119059
+    }
+  },
+  "risk_bands": [
+    {
+      "category": "Low",
+      "transactions": 57156,
+      "share": 0.9678599248145765,
+      "fraud_cases": 1089,
+      "fraud_rate": 0.01905311778290993,
+      "fraud_captured": 0.4920921825576141
+    },
+    {
+      "category": "Medium",
+      "transactions": 414,
+      "share": 0.007010532732753073,
+      "fraud_cases": 95,
+      "fraud_rate": 0.22946859903381642,
+      "fraud_captured": 0.04292815183009489
+    },
+    {
+      "category": "High",
+      "transactions": 349,
+      "share": 0.005909845226402953,
+      "fraud_cases": 136,
+      "fraud_rate": 0.38968481375358166,
+      "fraud_captured": 0.061455038409399004
+    },
+    {
+      "category": "Critical",
+      "transactions": 1135,
+      "share": 0.019219697226267485,
+      "fraud_cases": 893,
+      "fraud_rate": 0.786784140969163,
+      "fraud_captured": 0.403524627202892
+    }
+  ],
+  "split_sizes": {
+    "train": 472432,
+    "threshold": 59054,
+    "test": 59054
+  }
+}

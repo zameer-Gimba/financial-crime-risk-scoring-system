@@ -93,7 +93,7 @@ N_FOLDS = 5
 # on top of the stack's own internal CV. Off by default (slow).
 RUN_CROSS_VALIDATION = False
 
-N_ESTIMATORS = 400
+N_ESTIMATORS = 1000
 LEARNING_RATE = 0.05
 
 TARGET = "isFraud"

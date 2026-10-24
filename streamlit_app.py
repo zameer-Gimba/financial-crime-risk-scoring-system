@@ -298,7 +298,9 @@ def risk_gauge(score: int, category: str) -> go.Figure:
             ),
         )
     )
-    return style_chart(fig, height=280)
+    style_chart(fig, height=280)
+    fig.update_layout(margin=dict(l=30, r=30, t=50, b=10))
+    return fig
 
 
 def explanation_chart(explanation: pd.DataFrame) -> go.Figure:
