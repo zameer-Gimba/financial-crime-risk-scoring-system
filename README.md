@@ -10,6 +10,8 @@
 
 **Live demo:** https://financial-crime-risk-scoring-system.streamlit.app/
 
+**Related project:** [Bank Statement Forensic Analyzer](https://github.com/zameer-Gimba/bank-statement-forensic-analyzer) ([live demo](https://bank-statement-forensic-analyzer.streamlit.app/)) - traces money across multi-bank statements and flags mule, structuring and round-tripping patterns.
+
 ## Overview
 
 The **Financial Crime Detection & Risk Scoring System** is an end-to-end machine learning application that detects potentially fraudulent card transactions and supports financial crime investigations.
