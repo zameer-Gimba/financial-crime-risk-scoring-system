@@ -4,7 +4,11 @@
 ![Machine Learning](https://img.shields.io/badge/Machine%20Learning-Ensemble-green)
 ![Streamlit](https://img.shields.io/badge/Dashboard-Streamlit-red)
 ![License](https://img.shields.io/badge/License-MIT-orange)
-![Status](https://img.shields.io/badge/Status-Deployable-brightgreen)
+![Status](https://img.shields.io/badge/Status-Live-brightgreen)
+
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://financial-crime-risk-scoring-system.streamlit.app/)
+
+**Live demo:** https://financial-crime-risk-scoring-system.streamlit.app/
 
 ## Overview
 
@@ -116,6 +120,8 @@ The individual stages can still be run on their own (`python -m src.merge_data`,
 ---
 
 # Deploying to Streamlit Community Cloud
+
+The app is deployed at https://financial-crime-risk-scoring-system.streamlit.app/. To deploy your own copy:
 
 1. Push this repository to GitHub (already done if you are reading it there).
 2. Go to [share.streamlit.io](https://share.streamlit.io) → **Create app** → **Deploy a public app from GitHub**.
