@@ -125,7 +125,7 @@ def page_overview(metrics: dict, predictor: FraudRiskPredictor) -> None:
                    help="Of the transactions flagged, the share that were fraud.")
     cols[3].metric("Recall", f"{test['recall']:.1%}",
                    help="Of all fraud, the share the model flagged.")
-    cols[4].metric("Decision threshold", f"{metrics['threshold']:.3f}",
+    cols[4].metric("Threshold", f"{metrics['threshold']:.3f}",
                    help="Probability above which a transaction is flagged "
                         "(maps to risk score 50). Tuned to maximise F1.")
 
@@ -138,59 +138,58 @@ def page_overview(metrics: dict, predictor: FraudRiskPredictor) -> None:
 
     bands = pd.DataFrame(metrics["risk_bands"])
 
-    left, right = st.columns([3, 2])
+    fig = go.Figure(
+        go.Bar(
+            x=bands["category"],
+            y=bands["fraud_rate"],
+            marker_color=[CATEGORY_COLORS[c] for c in bands["category"]],
+            text=[f"{v:.1%}" for v in bands["fraud_rate"]],
+            textposition="outside",
+            cliponaxis=False,
+            customdata=bands[["transactions", "fraud_cases"]],
+            hovertemplate=(
+                "<b>%{x}</b><br>Fraud rate: %{y:.1%}<br>"
+                "Transactions: %{customdata[0]:,}<br>"
+                "Fraud cases: %{customdata[1]:,}<extra></extra>"
+            ),
+        )
+    )
+    fig.update_layout(
+        title="Observed fraud rate by risk category",
+        yaxis_tickformat=".0%",
+        yaxis_title="Fraud rate",
+        yaxis_range=[0, min(1.0, bands["fraud_rate"].max() * 1.15)],
+        showlegend=False,
+        bargap=0.35,
+    )
+    st.plotly_chart(style_chart(fig, height=320), width="stretch")
 
-    with left:
-        fig = go.Figure(
-            go.Bar(
-                x=bands["category"],
-                y=bands["fraud_rate"],
-                marker_color=[CATEGORY_COLORS[c] for c in bands["category"]],
-                text=[f"{v:.1%}" for v in bands["fraud_rate"]],
-                textposition="outside",
-                customdata=bands[["transactions", "fraud_cases"]],
-                hovertemplate=(
-                    "<b>%{x}</b><br>Fraud rate: %{y:.1%}<br>"
-                    "Transactions: %{customdata[0]:,}<br>"
-                    "Fraud cases: %{customdata[1]:,}<extra></extra>"
-                ),
-            )
-        )
-        fig.update_layout(
-            title="Observed fraud rate by risk category",
-            yaxis_tickformat=".0%",
-            yaxis_title="Fraud rate",
-            showlegend=False,
-        )
-        st.plotly_chart(style_chart(fig), width="stretch")
-
-    with right:
-        table = bands.assign(
-            category=bands["category"].map(category_badge),
-            share=bands["share"].map("{:.1%}".format),
-            fraud_rate=bands["fraud_rate"].map("{:.1%}".format),
-            fraud_captured=bands["fraud_captured"].map("{:.1%}".format),
-        ).rename(
-            columns={
-                "category": "Category",
-                "transactions": "Transactions",
-                "share": "Share",
-                "fraud_cases": "Fraud cases",
-                "fraud_rate": "Fraud rate",
-                "fraud_captured": "Share of all fraud",
-            }
-        )
-        st.dataframe(table, hide_index=True, width="stretch")
-        st.markdown(
-            f"**Score bands:** Low 0–{LOW_RISK_MAX} · Medium "
-            f"{LOW_RISK_MAX + 1}–{MEDIUM_RISK_MAX} · High "
-            f"{MEDIUM_RISK_MAX + 1}–{HIGH_RISK_MAX} · Critical "
-            f"{HIGH_RISK_MAX + 1}–100"
-        )
+    table = bands.assign(
+        category=bands["category"].map(category_badge),
+        share=bands["share"].map("{:.1%}".format),
+        fraud_rate=bands["fraud_rate"].map("{:.1%}".format),
+        fraud_captured=bands["fraud_captured"].map("{:.1%}".format),
+    ).rename(
+        columns={
+            "category": "Category",
+            "transactions": "Transactions",
+            "share": "Share",
+            "fraud_cases": "Fraud cases",
+            "fraud_rate": "Fraud rate",
+            "fraud_captured": "Share of all fraud",
+        }
+    )
+    st.dataframe(table, hide_index=True, width="stretch")
+    st.caption(
+        f"Score bands: Low 0–{LOW_RISK_MAX} · Medium "
+        f"{LOW_RISK_MAX + 1}–{MEDIUM_RISK_MAX} · High "
+        f"{MEDIUM_RISK_MAX + 1}–{HIGH_RISK_MAX} · Critical "
+        f"{HIGH_RISK_MAX + 1}–100"
+    )
 
     st.subheader("Model performance")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
 
     with c1:
         pr = load_csv(str(PR_CURVE_REPORT))
@@ -204,7 +203,7 @@ def page_overview(metrics: dict, predictor: FraudRiskPredictor) -> None:
         fig.add_hline(y=test["fraud_rate"], line_dash="dot",
                       line_color=REFERENCE_GRAY,
                       annotation_text="random model",
-                      annotation_position="top right")
+                      annotation_position="top left")
         fig.update_layout(title="Precision-recall curve",
                           xaxis_title="Recall", yaxis_title="Precision",
                           hovermode="x unified")
@@ -227,25 +226,49 @@ def page_overview(metrics: dict, predictor: FraudRiskPredictor) -> None:
                           hovermode="x unified")
         st.plotly_chart(style_chart(fig), width="stretch")
 
-    with c3:
-        cm = test["confusion_matrix"]
-        z = [[cm["tn"], cm["fp"]], [cm["fn"], cm["tp"]]]
+    st.subheader("Confusion matrix at the decision threshold")
+
+    cm = test["confusion_matrix"]
+    z = [[cm["tn"], cm["fp"]], [cm["fn"], cm["tp"]]]
+
+    m1, m2 = st.columns([3, 2], vertical_alignment="center")
+
+    with m1:
         fig = go.Figure(
             go.Heatmap(
                 z=z,
-                x=["Predicted legitimate", "Predicted fraud"],
-                y=["Actual legitimate", "Actual fraud"],
+                x=["Legitimate", "Fraud"],
+                y=["Legitimate", "Fraud"],
                 colorscale=[[0, "#CDE2FB"], [1, "#184F95"]],
                 showscale=False,
                 text=[[f"{v:,}" for v in row] for row in z],
                 texttemplate="%{text}",
-                hovertemplate="%{y} / %{x}: %{z:,}<extra></extra>",
-                xgap=2, ygap=2,
+                textfont=dict(size=16),
+                hovertemplate=(
+                    "Actual %{y}, predicted %{x}: %{z:,}<extra></extra>"
+                ),
+                xgap=3, ygap=3,
             )
         )
-        fig.update_layout(title="Confusion matrix (at threshold)")
-        fig.update_yaxes(autorange="reversed")
-        st.plotly_chart(style_chart(fig), width="stretch")
+        fig.update_xaxes(title="Predicted", side="top")
+        fig.update_yaxes(title="Actual", autorange="reversed")
+        style_chart(fig, height=300)
+        fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig, width="stretch")
+
+    with m2:
+        total_fraud = cm["tp"] + cm["fn"]
+        total_legit = cm["tn"] + cm["fp"]
+        flagged = cm["tp"] + cm["fp"]
+        st.markdown(
+            f"- **{cm['tp']:,} of {total_fraud:,}** fraud cases caught "
+            f"({cm['tp'] / total_fraud:.1%} recall)\n"
+            f"- **{cm['tp']:,} of {flagged:,}** flagged transactions were "
+            f"fraud ({cm['tp'] / flagged:.1%} precision)\n"
+            f"- **{cm['fp']:,} false alarms** out of {total_legit:,} "
+            f"legitimate transactions ({cm['fp'] / total_legit:.2%})\n"
+            f"- **{cm['fn']:,} fraud cases missed**"
+        )
 
     with st.expander("All holdout metrics and base-model comparison"):
         detail = {
@@ -325,8 +348,8 @@ def explanation_chart(explanation: pd.DataFrame) -> go.Figure:
     )
     fig.add_vline(x=0, line_color=REFERENCE_GRAY, line_width=1)
     fig.update_layout(
-        title="Why this score? Top drivers (red increases risk, blue decreases)",
-        xaxis_title="Contribution to fraud log-odds (SHAP)",
+        title="Top risk drivers",
+        xaxis_title="SHAP contribution (log-odds)",
         showlegend=False,
         bargap=0.25,
     )
@@ -390,13 +413,15 @@ def page_investigate(predictor: FraudRiskPredictor, metrics: dict) -> None:
     result = predictor.score(transaction).iloc[0].to_dict()
     explanation = predictor.explain(transaction)
 
-    left, right = st.columns([2, 3])
+    left, right = st.columns(2, vertical_alignment="center")
 
     with left:
         st.plotly_chart(
             risk_gauge(result["risk_score"], result["risk_category"]),
             width="stretch",
         )
+
+    with right:
         st.metric("Fraud probability", f"{result['fraud_probability']:.2%}")
         st.markdown(f"**Recommendation: {result['recommendation']}**")
         st.write(RECOMMENDATION_DETAILS[result["recommendation"]])
@@ -406,8 +431,12 @@ def page_investigate(predictor: FraudRiskPredictor, metrics: dict) -> None:
             + ("**fraud**" if actual == 1 else "**legitimate**")
         )
 
-    with right:
-        st.plotly_chart(explanation_chart(explanation), width="stretch")
+    st.subheader("Why this score?")
+    st.caption(
+        "Red bars push the transaction towards fraud, blue bars towards "
+        "legitimate. Values are SHAP contributions on the log-odds scale."
+    )
+    st.plotly_chart(explanation_chart(explanation), width="stretch")
 
     pdf = build_transaction_report(
         transaction.iloc[0],
